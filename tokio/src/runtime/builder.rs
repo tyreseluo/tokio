@@ -1514,25 +1514,42 @@ cfg_rt_multi_thread! {
             use crate::runtime::{Config, runtime::Scheduler};
             use crate::runtime::scheduler::{self, MultiThread};
 
+            // 核心线程数设置
+            // self.worker_threads: 用户指定的核心线程数。
+            // num_cpus：如果用户未指定，默认使用系统 CPU 的核心数。
             let core_threads = self.worker_threads.unwrap_or_else(num_cpus);
 
+            // 驱动初始化
+            // 创建事件驱动（driver）和其句柄（driver_handle）。
+            // 事件驱动负责管理 I/O 和计时器等系统资源。
             let (driver, driver_handle) = driver::Driver::new(self.get_cfg(core_threads))?;
 
             // Create the blocking pool
+            // 阻塞线程池创建
+            // 创建一个阻塞线程池，用于执行需要阻塞的任务（例如文件 I/O）。
+            // max_blocking_threads：最大阻塞线程数。
             let blocking_pool =
                 blocking::create_blocking_pool(self, self.max_blocking_threads + core_threads);
             let blocking_spawner = blocking_pool.spawner().clone();
 
-            // Generate a rng seed for this runtime.
+            //  随机种子生成
+            // 生成随机种子，用于任务调度的随机化（提升调度公平性）。
             let seed_generator_1 = self.seed_generator.next_generator();
             let seed_generator_2 = self.seed_generator.next_generator();
 
+            // 多线程调度器初始化
+            // MultiThread::new：初始化多线程任务调度器。
             let (scheduler, handle, launch) = MultiThread::new(
                 core_threads,
                 driver,
                 driver_handle,
                 blocking_spawner,
                 seed_generator_2,
+                // 配置项（Config）：
+                // before_park、after_unpark：挂起与唤醒时的回调函数。
+                // global_queue_interval：全局任务队列的轮询间隔。
+                // local_queue_capacity：每个线程本地队列的任务容量。
+                // seed_generator：用于调度的随机种子。
                 Config {
                     before_park: self.before_park.clone(),
                     after_unpark: self.after_unpark.clone(),
@@ -1552,9 +1569,14 @@ cfg_rt_multi_thread! {
             let handle = Handle { inner: scheduler::Handle::MultiThread(handle) };
 
             // Spawn the thread pool workers
+            // 启动线程池
+            // handle.enter()：设置当前线程的上下文为新的运行时。
             let _enter = handle.enter();
+            // launch.launch()：启动多线程调度器的工作线程。
             launch.launch();
 
+            // 返回运行时
+            // 创建并返回一个包含调度器、句柄和阻塞线程池的完整运行时实例。
             Ok(Runtime::from_parts(Scheduler::MultiThread(scheduler), handle, blocking_pool))
         }
 

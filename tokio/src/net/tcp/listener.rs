@@ -99,6 +99,7 @@ impl TcpListener {
         /// }
         /// ```
         pub async fn bind<A: ToSocketAddrs>(addr: A) -> io::Result<TcpListener> {
+            // to_socket_addrs 只是解析 server 地址，之所以这里加了 await ，是因为可能涉及到 DNS 解析，所以需要是异步的。
             let addrs = to_socket_addrs(addr).await?;
 
             let mut last_err = None;
